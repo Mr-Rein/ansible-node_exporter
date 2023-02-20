@@ -76,7 +76,7 @@
     immediate: yes
     state: enabled
   loop:
-    - 9090/tcp
+    - 9100/tcp
   notify:
     - Reload firewalld
     - Restart Node_exporter
