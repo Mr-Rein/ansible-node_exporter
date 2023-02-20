@@ -1,0 +1,12 @@
+---
+# Default values
+
+# Packages
+packages:
+  - tar
+  - wget
+
+# Node_exporter
+exporter_user: node_exporter
+exporter_download_location: /tmp
+exporter_version: 1.5.0

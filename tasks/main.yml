@@ -1,0 +1,82 @@
+---
+# Tasks
+
+# General
+- name: Update system
+  become: true
+  dnf:
+    name: "*"
+    state: latest
+
+- name: Install Packages
+  become: true
+  dnf:
+    name: "{{ packages }}"
+    state: latest
+
+- name: Populate service facts
+  service_facts:
+
+# Installing node_exporter
+- name: Install, configure and start node_exporter
+  block:
+    - name: Create node_exporter user
+      become: true
+      user:
+        name: "{{ exporter_user }}"
+        shell: /usr/bin/false
+        create_home: false
+
+    - name: Download node_exporter
+      get_url:
+        url: "https://github.com/prometheus/node_exporter/releases/download/v{{ exporter_version }}/node_exporter-{{ exporter_version }}.linux-amd64.tar.gz"
+        dest: "{{ exporter_download_location }}"
+
+    - name: Untar node_exporter
+      unarchive:
+        src: "{{ exporter_download_location }}/node_exporter-{{ exporter_version }}.linux-amd64.tar.gz"
+        remote_src: true
+        dest: "{{ exporter_download_location }}"
+
+    - name: Copy node_exporter binary
+      become: true
+      copy: 
+        src: "{{ exporter_download_location }}/node_exporter-{{ exporter_version }}.linux-amd64/node_exporter"
+        remote_src: true
+        dest: /usr/local/bin/
+        mode: '0755'
+
+    - name: Create systemd service for node_exporter
+      become: true
+      copy:
+        src: node_exporter.service
+        dest: /etc/systemd/system/node_exporter.service
+  when: ansible_facts.services["node_exporter.service"] is not defined
+
+# Post installation
+- name: Reload systemd config
+  become: true
+  systemd:
+    daemon_reload: yes
+
+- name: Cleanup obsolete files
+  file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - "{{ exporter_download_location }}/node_exporter-{{ exporter_version }}.linux-amd64.tar.gz"
+    - "{{ exporter_download_location }}/node_exporter-{{ exporter_version }}.linux-amd64"
+
+# Edit firewall rules
+- name: Allow incoming traffic on port 3000, 9090 & 9100
+  become: true
+  firewalld:
+    port: "{{ item }}"
+    permanent: yes
+    immediate: yes
+    state: enabled
+  loop:
+    - 9090/tcp
+  notify:
+    - Reload firewalld
+    - Restart Node_exporter

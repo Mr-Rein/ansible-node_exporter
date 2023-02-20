@@ -1,0 +1,15 @@
+---
+# Handlers
+
+- name: Restart Node_exporter
+  become: true
+  service:
+    name: node_exporter
+    enabled: yes
+    state: restarted
+
+- name: Reload firewalld
+  become: true
+  service:
+    name: firewalld
+    state: reloaded
