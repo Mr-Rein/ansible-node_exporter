@@ -13,6 +13,14 @@
   dnf:
     name: "{{ packages }}"
     state: latest
+  when: ansible_os_family == "RedHat"
+
+- name: Install Packages
+  become: true
+  apt:
+    name: "{{ packages }}"
+    state: latest
+  when: ansible_os_family == "Debian"
 
 - name: Populate service facts
   service_facts:
