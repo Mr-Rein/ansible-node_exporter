@@ -5,6 +5,7 @@ Simple role to setup node_exporter. This has only been tested on:
 - `AlmaLinux 9.0`
 - `AlmaLinux 9.1`
 - `Debian 11.5`
+- `Debian 11.6 - aarch64 (ARM)`
 
 ## Requirements
 
