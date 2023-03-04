@@ -1,7 +1,7 @@
 ---
 # Handlers
 
-- name: Restart Node_exporter
+- name: Restart node_exporter
   become: true
   service:
     name: node_exporter

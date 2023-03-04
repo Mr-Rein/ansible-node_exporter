@@ -2,24 +2,32 @@
 # Tasks
 
 # General
-- name: Update system
-  become: true
-  dnf:
-    name: "*"
-    state: latest
-
-- name: Install Packages
-  become: true
-  dnf:
-    name: "{{ packages }}"
-    state: latest
+- name: Update & install packages RHEL
+  block:
+    - name: Update system
+      become: true
+      dnf:
+        name: "*"
+        state: latest
+    - name: Install Packages
+      become: true
+      dnf:
+        name: "{{ packages }}"
+        state: latest
   when: ansible_os_family == "RedHat"
 
-- name: Install Packages
-  become: true
-  apt:
-    name: "{{ packages }}"
-    state: latest
+- name: Update & install packages Debian
+  block:
+    - name: Update system
+      become: true
+      apt:
+        upgrade: yes
+        update_cache: yes
+    - name: Install Packages
+      become: true
+      apt:
+        name: "{{ packages }}"
+        state: latest
   when: ansible_os_family == "Debian"
 
 - name: Populate service facts
@@ -35,24 +43,50 @@
         shell: /usr/bin/false
         create_home: false
 
-    - name: Download node_exporter
-      get_url:
-        url: "https://github.com/prometheus/node_exporter/releases/download/v{{ exporter_version }}/node_exporter-{{ exporter_version }}.linux-amd64.tar.gz"
-        dest: "{{ exporter_download_location }}"
+    - name: Install x86 architecture package
+      block:
+        - name: Download node_exporter x86 architecture version
+          get_url:
+            url: "https://github.com/prometheus/node_exporter/releases/download/v{{ exporter_version }}/node_exporter-{{ exporter_version }}.linux-amd64.tar.gz"
+            dest: "{{ exporter_download_location }}"
 
-    - name: Untar node_exporter
-      unarchive:
-        src: "{{ exporter_download_location }}/node_exporter-{{ exporter_version }}.linux-amd64.tar.gz"
-        remote_src: true
-        dest: "{{ exporter_download_location }}"
+        - name: Untar node_exporter
+          unarchive:
+            src: "{{ exporter_download_location }}/node_exporter-{{ exporter_version }}.linux-amd64.tar.gz"
+            remote_src: true
+            dest: "{{ exporter_download_location }}"
 
-    - name: Copy node_exporter binary
-      become: true
-      copy: 
-        src: "{{ exporter_download_location }}/node_exporter-{{ exporter_version }}.linux-amd64/node_exporter"
-        remote_src: true
-        dest: /usr/local/bin/
-        mode: '0755'
+        - name: Copy node_exporter binary
+          become: true
+          copy: 
+            src: "{{ exporter_download_location }}/node_exporter-{{ exporter_version }}.linux-amd64/node_exporter"
+            remote_src: true
+            dest: /usr/local/bin/
+            mode: '0755'
+      when: ansible_architecture == "x86_64"
+
+    - name: Install 64bit ARM architecture pakage
+      block:
+        - name: Download node_exporter aarch64 (ARM) version
+          get_url:
+            url: "https://github.com/prometheus/node_exporter/releases/download/v{{ exporter_version }}/node_exporter-{{ exporter_version }}.linux-armv7.tar.gz"
+            dest: "{{ exporter_download_location }}"
+          when: ansible_architecture == "aarch64"
+
+        - name: Untar node_exporter
+          unarchive:
+            src: "{{ exporter_download_location }}/node_exporter-{{ exporter_version }}.linux-armv7.tar.gz"
+            remote_src: true
+            dest: "{{ exporter_download_location }}"
+
+        - name: Copy node_exporter binary
+          become: true
+          copy: 
+            src: "{{ exporter_download_location }}/node_exporter-{{ exporter_version }}.linux-armv7/node_exporter"
+            remote_src: true
+            dest: /usr/local/bin/
+            mode: '0755'
+      when: ansible_architecture == "aarch64"
 
     - name: Create systemd service for node_exporter
       become: true
@@ -66,14 +100,25 @@
   become: true
   systemd:
     daemon_reload: yes
+  notify: Restart node_exporter
 
-- name: Cleanup obsolete files
+- name: Cleanup obsolete files x86
   file:
     path: "{{ item }}"
     state: absent
   loop:
     - "{{ exporter_download_location }}/node_exporter-{{ exporter_version }}.linux-amd64.tar.gz"
     - "{{ exporter_download_location }}/node_exporter-{{ exporter_version }}.linux-amd64"
+  when: ansible_architecture == "x86_64"
+
+- name: Cleanup obsolete files ARM
+  file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - "{{ exporter_download_location }}/node_exporter-{{ exporter_version }}.linux-armv7.tar.gz"
+    - "{{ exporter_download_location }}/node_exporter-{{ exporter_version }}.linux-armv7"
+  when: ansible_architecture == "aarch64"
 
 # Edit firewall rules
 - name: Allow incoming traffic on port 9100
@@ -85,6 +130,5 @@
     state: enabled
   loop:
     - 9100/tcp
-  notify:
-    - Reload firewalld
-    - Restart Node_exporter
+  notify: Reload firewalld
+  when: ansible_os_family == "RedHat"
